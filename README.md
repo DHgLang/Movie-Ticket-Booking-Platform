@@ -31,9 +31,8 @@ VNPay / TMDB for Lambda: set env vars when running `npx ampx sandbox --once` (ne
 movie-booking/
 ├── frontend/          # React + Vite + TypeScript
 ├── amplify/           # Amplify Gen 2 backend
-├── docs/              # Architecture diagrams
-├── tools/             # Python draw.io generators
-└── venv/              # Python only (optional)
+├── shared/            # Shared types & helpers
+└── tools/             # Optional utilities
 ```
 
 ## ⚠️ Chạy trên AWS (không phải local mock)
@@ -57,8 +56,6 @@ npm run sandbox
 # 5. Chạy FE trỏ AWS:
 npm run dev
 ```
-
-Chi tiết: **`docs/DEPLOY-AWS.md`**
 
 | Mode | Khi nào | API |
 |------|---------|-----|
@@ -112,8 +109,6 @@ Open http://localhost:5173
 
 ## Architecture
 
-See `docs/movie-booking-aws-v3.drawio` and `docs/SCRIPT-TRINH-BAY.md`.
-
 | Layer | Tech |
 |-------|------|
 | Frontend | Amplify Hosting / React |
@@ -129,9 +124,3 @@ See `docs/movie-booking-aws-v3.drawio` and `docs/SCRIPT-TRINH-BAY.md`.
 | `npm run dev` | Frontend local |
 | `npm run sandbox` | Deploy Amplify sandbox |
 | `npm run build` | Build frontend for production |
-
-## Docs
-
-- `docs/HUONG-DAN-MO-SO-DO.md` — architecture diagram
-- `docs/SCRIPT-TRINH-BAY.md` — presentation script
-- `docs/DEPLOY-AWS.md` — AWS deployment guide
