@@ -35,7 +35,30 @@ movie-booking/
 └── tools/             # Optional utilities
 ```
 
-## Quick start
+## Chạy trên AWS (không phải local mock)
+
+```powershell
+# 1. Cài AWS CLI: https://aws.amazon.com/cli/
+# 2. Cấu hình:
+cd D:\TT\movie-booking
+npx ampx configure profile
+
+# 3. Deploy lên AWS:
+npm run sandbox
+
+# 4. Tạo frontend/.env.local — dán apiUrl từ amplify_outputs.json:
+#    VITE_API_URL=https://xxxxx.execute-api.ap-southeast-1.amazonaws.com
+
+# 5. Chạy FE trỏ AWS:
+npm run dev
+```
+
+| Mode | Khi nào | API |
+|------|---------|-----|
+| Local mock | Chưa có AWS key | `/api` trên localhost |
+| **AWS thật** | Sau `npm run sandbox` | `VITE_API_URL` → API Gateway |
+
+## Quick start (local tạm — chờ AWS)
 
 ### 1. Prerequisites
 
