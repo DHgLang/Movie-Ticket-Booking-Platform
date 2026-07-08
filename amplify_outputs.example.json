@@ -1,0 +1,26 @@
+{
+  "auth": {
+    "user_pool_id": "REPLACE_ME",
+    "aws_region": "ap-southeast-1",
+    "user_pool_client_id": "REPLACE_ME",
+    "identity_pool_id": "REPLACE_ME",
+    "unauthenticated_identities_enabled": true
+  },
+  "data": {
+    "url": "https://REPLACE_ME.appsync-api.ap-southeast-1.amazonaws.com/graphql",
+    "aws_region": "ap-southeast-1",
+    "api_key": "REPLACE_ME",
+    "default_authorization_type": "AMAZON_COGNITO_USER_POOLS",
+    "authorization_types": ["API_KEY", "AWS_IAM"]
+  },
+  "version": "1.4",
+  "custom": {
+    "apiUrl": "https://REPLACE_ME.execute-api.ap-southeast-1.amazonaws.com/",
+    "bookingQueueUrl": "REPLACE_ME",
+    "posterBucketName": "REPLACE_ME",
+    "posterCdnBase": "REPLACE_ME",
+    "rumAppMonitorId": "REPLACE_ME",
+    "rumAppMonitorName": "spirit-movie-rum",
+    "cloudwatchRumConsoleUrl": "https://ap-southeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-southeast-1#rum:app-monitor/spirit-movie-rum"
+  }
+}

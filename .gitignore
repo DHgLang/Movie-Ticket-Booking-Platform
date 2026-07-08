@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+dist/
+.amplify/
+
+# Python venv (draw.io tools only)
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+
+# Env & Amplify outputs (secrets / per-developer)
+.env
+.env.local
+.env.*.local
+amplify_outputs.json
+
+# Local debug
+tmp-vnpay*.html
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+*.log
+
+# Amplify sandbox
+amplify/.amplify/
+
+# Deploy artifacts
+frontend-dist.zip
+*.zip
+_zip-check/
+_deployed-check/

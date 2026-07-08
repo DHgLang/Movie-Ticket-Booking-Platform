@@ -1,0 +1,22 @@
+version: 1
+applications:
+  - appRoot: frontend
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: dist
+        files:
+          - "**/*"
+      cache:
+        paths:
+          - node_modules/**/*
+    env:
+      variables:
+        VITE_API_URL: https://x2nxz9vcxa.execute-api.ap-southeast-1.amazonaws.com
+        VITE_TMDB_API_KEY: your_tmdb_key_here

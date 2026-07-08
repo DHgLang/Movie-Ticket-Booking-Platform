@@ -1,0 +1,17 @@
+[
+  {
+    "source": "/assets/<*>",
+    "target": "/assets/<*>",
+    "status": "200"
+  },
+  {
+    "source": "/dining/<*>",
+    "target": "/dining/<*>",
+    "status": "200"
+  },
+  {
+    "source": "/<*>",
+    "target": "/index.html",
+    "status": "404-200"
+  }
+]
