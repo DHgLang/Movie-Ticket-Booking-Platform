@@ -7,6 +7,8 @@
     "amplify"
   ],
   "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "postinstall": "node scripts/setup.mjs",
     "dev": "npm run dev -w frontend",
     "build": "npm run build -w frontend",
     "sandbox": "node scripts/with-env.mjs npx ampx sandbox",

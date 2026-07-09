@@ -4,25 +4,34 @@ Spirit Movie — full-stack movie ticket booking on **AWS Amplify** (React + Cog
 
 **Live demo:** https://main.d2zv6ka00i1nyo.amplifyapp.com
 
-## Secrets & config
-
-Do **not** commit `.env` or `amplify_outputs.json` (see `.gitignore`).
-
-After clone:
+## Chạy nhanh (máy mới — dùng backend demo)
 
 ```powershell
+git clone https://github.com/DHgLang/Movie-Ticket-Booking-Platform.git
+cd Movie-Ticket-Booking-Platform
 npm install
-copy .env.example .env
-# Sửa .env: VITE_API_URL, VITE_TMDB_API_KEY, TMDB_API_KEY, VNPay (nếu cần)
+# Tự tạo .env + amplify_outputs.json từ file mẫu
 
-npx ampx sandbox --once
-# Creates amplify_outputs.json locally (Cognito, API URL, RUM, …)
+notepad .env
+# Chỉ cần sửa: VITE_TMDB_API_KEY và TMDB_API_KEY (cùng một key TMDB)
 
-copy amplify_outputs.example.json amplify_outputs.json   # only if sandbox not run yet
-# Then replace REPLACE_ME values from sandbox output.
+npm run dev
 ```
 
-Một file **`.env` ở thư mục gốc** dùng cho cả `npm run dev` và `npm run sandbox`.
+Mở http://localhost:5173 — frontend trỏ API demo: `https://x2nxz9vcxa.execute-api.ap-southeast-1.amazonaws.com`
+
+| File | Commit GitHub? | Ghi chú |
+|------|----------------|---------|
+| `.env.example` | Có | Mẫu — API URL đã điền sẵn |
+| `.env` | Không | Copy khi `npm install`, bạn điền TMDB key |
+| `amplify_outputs.example.json` | Có | Cognito + RUM demo (public) |
+| `amplify_outputs.json` | Không | Tự tạo khi setup |
+
+## Secrets & config (tự deploy AWS)
+
+Do **not** commit `.env` hoặc `amplify_outputs.json` sau khi chạy sandbox riêng (xem `.gitignore`).
+
+Nếu **tự deploy** backend (`npm run sandbox`), file `amplify_outputs.json` sẽ bị ghi đè bởi sandbox — cập nhật `VITE_API_URL` trong `.env` theo output mới.
 
 ## Structure
 
@@ -116,6 +125,7 @@ Open http://localhost:5173
 
 | Command | Description |
 |---------|-------------|
+| `npm run setup` | Tạo `.env` + `amplify_outputs.json` từ mẫu (nếu chưa có) |
 | `npm run dev` | Frontend local |
 | `npm run sandbox` | Deploy Amplify sandbox |
 | `npm run build` | Build frontend for production |
