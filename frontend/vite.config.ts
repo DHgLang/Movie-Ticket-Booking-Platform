@@ -9,10 +9,11 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const monorepoRoot = path.resolve(rootDir, "..");
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, ".", "");
+  const env = loadEnv(mode, monorepoRoot, "");
   const tmdbKey = env.TMDB_API_KEY ?? "";
 
   return {
+    envDir: monorepoRoot,
     resolve: {
       alias: {
         "aws-rum-web": path.resolve(monorepoRoot, "node_modules/aws-rum-web"),
@@ -37,7 +38,7 @@ export default defineConfig(({ mode }) => {
             if (!req.url?.startsWith("/tmdb/")) return next();
             if (!tmdbKey) {
               res.statusCode = 500;
-              res.end(JSON.stringify({ error: "TMDB_API_KEY missing in .env.local" }));
+              res.end(JSON.stringify({ error: "TMDB_API_KEY missing in .env (repo root)" }));
               return;
             }
             const apiPath = req.url.replace(/^\/tmdb/, "");

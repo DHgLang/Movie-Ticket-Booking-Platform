@@ -4,26 +4,25 @@ Spirit Movie — full-stack movie ticket booking on **AWS Amplify** (React + Cog
 
 **Live demo:** https://main.d2zv6ka00i1nyo.amplifyapp.com
 
-## Secrets & `amplify_outputs.json`
+## Secrets & config
 
-Do **not** commit `amplify_outputs.json` or `.env.local` (see `.gitignore`).
+Do **not** commit `.env` or `amplify_outputs.json` (see `.gitignore`).
 
 After clone:
 
 ```powershell
 npm install
+copy .env.example .env
+# Sửa .env: VITE_API_URL, VITE_TMDB_API_KEY, TMDB_API_KEY, VNPay (nếu cần)
+
 npx ampx sandbox --once
 # Creates amplify_outputs.json locally (Cognito, API URL, RUM, …)
 
 copy amplify_outputs.example.json amplify_outputs.json   # only if sandbox not run yet
 # Then replace REPLACE_ME values from sandbox output.
-
-# frontend/.env.local
-VITE_API_URL=https://YOUR_API_ID.execute-api.ap-southeast-1.amazonaws.com
-VITE_TMDB_API_KEY=your_tmdb_key
 ```
 
-VNPay / TMDB for Lambda: set env vars when running `npx ampx sandbox --once` (never commit).
+Một file **`.env` ở thư mục gốc** dùng cho cả `npm run dev` và `npm run sandbox`.
 
 ## Structure
 
@@ -46,7 +45,7 @@ npx ampx configure profile
 # 3. Deploy lên AWS:
 npm run sandbox
 
-# 4. Tạo frontend/.env.local — dán apiUrl từ amplify_outputs.json:
+# 4. Sửa .env — dán apiUrl từ amplify_outputs.json:
 #    VITE_API_URL=https://xxxxx.execute-api.ap-southeast-1.amazonaws.com
 
 # 5. Chạy FE trỏ AWS:
@@ -79,7 +78,7 @@ npm install
 npm run sandbox
 ```
 
-First run creates Cognito, API, SQS, DynamoDB tables. Copy `custom.apiUrl` from terminal into `frontend/.env.local`:
+First run creates Cognito, API, SQS, DynamoDB tables. Copy `custom.apiUrl` from terminal into `.env`:
 
 ```
 VITE_API_URL=https://xxxxx.execute-api.ap-southeast-1.amazonaws.com

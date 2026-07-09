@@ -9,8 +9,8 @@
   "scripts": {
     "dev": "npm run dev -w frontend",
     "build": "npm run build -w frontend",
-    "sandbox": "npx ampx sandbox",
-    "sandbox:delete": "npx ampx sandbox delete"
+    "sandbox": "node scripts/with-env.mjs npx ampx sandbox",
+    "sandbox:delete": "node scripts/with-env.mjs npx ampx sandbox delete"
   },
   "devDependencies": {
     "esbuild": "^0.28.0"
