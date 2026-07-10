@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Movie Ticket Booking — Serverless + Event-Driven (Nhóm)</title>
+  <style>
+    :root {
+      --aws: #ff9900; --border: #879196; --cloud: #232f3e;
+      --region-bg: #fffaf5; --block-bg: #f7fafa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      margin: 0; padding: 1rem 1.25rem 2rem;
+      background: #eaeded; color: #16191f; font-size: 10.5pt;
+    }
+    h1 { font-size: 1.3rem; margin: 0 0 0.2rem; }
+    .meta { color: #545b64; font-size: 0.88rem; margin-bottom: 0.75rem; }
+    h2 { font-size: 1rem; margin: 1.1rem 0 0.4rem; border-bottom: 2px solid var(--aws); padding-bottom: 0.15rem; }
+    h3 { font-size: 0.92rem; margin: 0.75rem 0 0.35rem; }
+
+    .presentation {
+      background: #fff; border: 1px solid var(--border);
+      border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1rem;
+      font-size: 0.9rem; line-height: 1.5;
+    }
+    .presentation p { margin: 0.4rem 0; }
+
+    .diagram-wrap {
+      background: #fff; border: 2px solid var(--border);
+      border-radius: 8px; padding: 0.75rem; overflow-x: auto;
+    }
+
+    /* AWS cloud envelope */
+    .aws-cloud {
+      border: 3px solid var(--cloud);
+      border-radius: 10px;
+      padding: 0.6rem;
+      background: #fafafa;
+      min-width: 960px;
+    }
+    .aws-cloud-title {
+      text-align: center; font-weight: 800; font-size: 0.85rem;
+      color: var(--cloud); margin-bottom: 0.5rem; letter-spacing: 0.05em;
+    }
+
+    .region {
+      border: 3px solid var(--aws);
+      border-radius: 8px;
+      background: var(--region-bg);
+      padding: 0.6rem;
+      margin: 0.4rem 0;
+    }
+    .region-label {
+      text-align: center; font-weight: 700; color: #b35c00;
+      font-size: 0.8rem; margin-bottom: 0.45rem;
+    }
+
+    .global-edge {
+      border: 2px dashed var(--cloud);
+      background: #fff;
+      border-radius: 6px;
+      padding: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .global-edge .tag {
+      font-size: 0.7rem; font-weight: 700; color: var(--cloud);
+      text-align: center; margin-bottom: 0.35rem;
+    }
+
+    .actors {
+      display: flex; justify-content: space-around; flex-wrap: wrap;
+      gap: 0.5rem; margin-bottom: 0.5rem;
+    }
+    .actor {
+      text-align: center; padding: 0.35rem 0.75rem;
+      border: 1px solid #1976d2; border-radius: 6px;
+      background: #e3f2fd; font-size: 0.8rem; min-width: 90px;
+    }
+    .actor-icon { font-size: 1.4rem; display: block; }
+
+    .block {
+      border: 2px solid #5a6c7d;
+      border-radius: 6px;
+      background: var(--block-bg);
+      padding: 0.45rem;
+      margin: 0.35rem 0;
+    }
+    .block-title {
+      font-weight: 700; font-size: 0.72rem; text-align: center;
+      color: #232f3e; margin-bottom: 0.35rem; text-transform: uppercase;
+    }
+    .services {
+      display: flex; flex-wrap: wrap; gap: 0.35rem; justify-content: center;
+    }
+    .svc {
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--aws);
+      background: #fff;
+      border-radius: 4px;
+      padding: 0.3rem 0.45rem;
+      font-size: 0.72rem;
+      text-align: center;
+      min-width: 72px;
+      line-height: 1.25;
+    }
+    .svc.lambda { border-left-color: #ff9900; background: #fff8f0; }
+    .svc.data { border-left-color: #3b48cc; }
+    .svc.ext { border-left-color: #c2185b; background: #fce4ec; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; }
+
+    .flow-num {
+      display: inline-block; background: var(--cloud); color: #fff;
+      border-radius: 50%; width: 1.1rem; height: 1.1rem;
+      font-size: 0.65rem; line-height: 1.1rem; text-align: center;
+      font-weight: 700; margin-right: 0.15rem;
+    }
+
+    .arrow { text-align: center; color: #545b64; font-size: 0.85rem; margin: 0.2rem 0; }
+
+    .outside {
+      border: 2px solid #7b1fa2; border-radius: 6px;
+      background: #f3e5f5; padding: 0.5rem; margin-top: 0.5rem;
+    }
+    .outside .tag { font-size: 0.7rem; font-weight: 700; color: #6a1b9a; text-align: center; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 0.35rem; }
+    th, td { border: 1px solid #d5dbdb; padding: 0.35rem 0.45rem; vertical-align: top; }
+    th { background: #fafafa; }
+    ol.flow { font-size: 0.86rem; line-height: 1.55; padding-left: 1.3rem; }
+    ol.flow li { margin: 0.3rem 0; }
+    .note {
+      background: #fff9e6; border-left: 4px solid var(--aws);
+      padding: 0.45rem 0.65rem; font-size: 0.84rem; margin: 0.5rem 0;
+    }
+    @media print { body { background: #fff; } }
+  </style>
+</head>
+<body>
+
+  <h1>Movie Ticket Booking System — Serverless + Event-Driven</h1>
+  <p class="meta">
+    Nhóm FCAJ · Kiến trúc tham chiếu
+    <a href="https://aws.amazon.com/vi/architecture/">AWS Architecture Center</a> ·
+    Region: <strong>ap-southeast-1</strong> ·
+    <em>xacminh = cá nhân · đề tài này = nhóm</em>
+  </p>
+
+  <h2>Script trình bày (copy vào Proposal)</h2>
+  <div class="presentation">
+    <p><strong>Em đại diện nhóm xin trình bày đề tài nhóm:</strong></p>
+    <p><strong>1. Mô tả dự án</strong><br>
+    Hệ thống <em>Movie Ticket Booking System</em> được xây dựng trên Amazon Web Services (AWS) theo kiến trúc <strong>Serverless</strong> kết hợp <strong>Event-Driven Architecture</strong>. Hệ thống hỗ trợ người dùng đặt vé, thanh toán trực tuyến, nhận vé điện tử qua Email và Check-in bằng QR Code. Mục tiêu: khả năng mở rộng, tính sẵn sàng, bảo mật và tối ưu chi phí vận hành.</p>
+    <p><strong>2. Mô tả mô hình</strong><br>
+    Route 53, CloudFront, WAF và S3 phân phối giao diện và bảo vệ ứng dụng. Amazon Cognito quản lý đăng nhập và phân quyền User/Admin. API Gateway tiếp nhận yêu cầu và chuyển đến các Lambda Service: User, Booking, Payment, Check-in, QR Generator, Notification và Admin. Dữ liệu lưu trên ElastiCache Redis, DynamoDB và RDS MySQL (qua RDS Proxy), kèm AWS Backup. Sau thanh toán thành công, EventBridge và SQS FIFO xử lý bất đồng bộ; QR Code lưu S3 và gửi Email qua SES. CloudWatch + SNS giám sát; CodeCommit, CodePipeline, CodeBuild triển khai CI/CD.</p>
+    <p><strong>3. Luồng hoạt động</strong><br>
+    Người dùng truy cập website, đăng nhập Cognito, gửi yêu cầu API Gateway. Lambda xử lý đặt vé, giữ ghế, thanh toán và lưu dữ liệu. Thanh toán xong → EventBridge/SQS → tạo QR → S3 → SES gửi vé. Tại rạp, Staff quét QR qua camera, hệ thống xác thực và cập nhật Check-in. CloudWatch theo dõi metrics/logs; Alarm + SNS cảnh báo Developer; Lambda deploy qua CI/CD.</p>
+  </div>
+
+  <h2>Sơ đồ kiến trúc</h2>
+  <div class="diagram-wrap">
+    <div class="actors">
+      <div class="actor"><span class="actor-icon">👤</span>User</div>
+      <div class="actor"><span class="actor-icon">👤</span>Admin</div>
+      <div class="actor"><span class="actor-icon">👤</span>Staff</div>
+      <div class="actor"><span class="actor-icon">👨‍💻</span>DEV</div>
+    </div>
+
+    <div class="aws-cloud">
+      <div class="aws-cloud-title">AWS CLOUD</div>
+
+      <!-- Global / Edge - OUTSIDE region box visually at top -->
+      <div class="global-edge">
+        <div class="tag">GLOBAL / EDGE — Route 53 · WAF · CloudFront (ngoài khung Region)</div>
+        <div class="block" style="margin:0">
+          <div class="block-title">Frontend</div>
+          <div class="services">
+            <div class="svc">Route 53</div>
+            <div class="svc">CloudFront</div>
+            <div class="svc">WAF</div>
+            <div class="svc">S3<br><small>Static Web</small></div>
+          </div>
+        </div>
+        <div class="arrow"><span class="flow-num">1</span> HTTPS Request (User / Admin / Staff)</div>
+      </div>
+
+      <div class="region">
+        <div class="region-label">REGION — ap-southeast-1</div>
+
+        <div class="grid-2">
+          <div class="block">
+            <div class="block-title">Authentication</div>
+            <div class="services">
+              <div class="svc">Amazon Cognito<br><small>User Pool</small></div>
+              <div class="svc">Amazon Cognito<br><small>Admin Pool</small></div>
+            </div>
+            <div class="arrow"><span class="flow-num">2</span> Login → JWT</div>
+          </div>
+          <div class="block">
+            <div class="block-title">API</div>
+            <div class="services">
+              <div class="svc" style="min-width:120px">Amazon API Gateway</div>
+            </div>
+            <div class="arrow"><span class="flow-num">3</span> HTTPS + JWT</div>
+          </div>
+        </div>
+
+        <div class="arrow"><span class="flow-num">4</span> Invoke</div>
+
+        <div class="block">
+          <div class="block-title">Lambda Services</div>
+          <div class="services">
+            <div class="svc lambda">User</div>
+            <div class="svc lambda">Booking</div>
+            <div class="svc lambda">Payment</div>
+            <div class="svc lambda">Check-in</div>
+            <div class="svc lambda">QR Generator</div>
+            <div class="svc lambda">Notification</div>
+            <div class="svc lambda">Admin</div>
+          </div>
+        </div>
+
+        <div class="arrow"><span class="flow-num">5</span> Read / Write</div>
+
+        <div class="block">
+          <div class="block-title">Data Layer</div>
+          <div class="services">
+            <div class="svc data">ElastiCache<br>Redis</div>
+            <div class="svc data">DynamoDB</div>
+            <div class="svc data">RDS Proxy</div>
+            <div class="svc data">RDS MySQL<br>Primary</div>
+            <div class="svc data">RDS MySQL<br>Standby</div>
+            <div class="svc data">AWS Backup</div>
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-top:0.4rem">
+          <div class="block">
+            <div class="block-title">Async Processing</div>
+            <div class="services">
+              <div class="svc">EventBridge</div>
+              <div class="svc">SQS FIFO</div>
+              <div class="svc">SQS DLQ</div>
+            </div>
+            <div class="arrow"><span class="flow-num">7</span> Publish event · <span class="flow-num">8</span> Route</div>
+          </div>
+          <div class="block">
+            <div class="block-title">Ticket Delivery</div>
+            <div class="services">
+              <div class="svc">S3<br><small>QR Images</small></div>
+              <div class="svc">Amazon SES</div>
+            </div>
+            <div class="arrow"><span class="flow-num">11</span> QR → S3 · <span class="flow-num">13</span> Email vé</div>
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-top:0.4rem">
+          <div class="block">
+            <div class="block-title">Monitoring &amp; Alerting</div>
+            <div class="services">
+              <div class="svc">CloudWatch</div>
+              <div class="svc">CloudWatch<br>Alarms</div>
+              <div class="svc">Amazon SNS</div>
+            </div>
+            <div class="arrow"><span class="flow-num">17</span> Metrics/Logs · <span class="flow-num">18</span> Alert → DEV</div>
+          </div>
+          <div class="block">
+            <div class="block-title">CI/CD</div>
+            <div class="services">
+              <div class="svc">CodeCommit</div>
+              <div class="svc">CodePipeline</div>
+              <div class="svc">CodeBuild</div>
+            </div>
+            <div class="arrow"><span class="flow-num">16</span> Deploy Lambda</div>
+          </div>
+        </div>
+
+        <div class="block" style="margin-top:0.4rem">
+          <div class="block-title">Check-in Flow (Staff)</div>
+          <div class="services">
+            <div class="svc">Staff Web</div>
+            <div class="svc">Camera</div>
+            <div class="svc">Scan QR</div>
+          </div>
+          <div class="arrow"><span class="flow-num">14</span> Check-in API + JWT · <span class="flow-num">15</span> Response</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="outside">
+      <div class="tag">THIRD-PARTY — NGOÀI AWS CLOUD</div>
+      <div class="services">
+        <div class="svc ext">Payment Gateway<br><small>VNPay / Momo</small></div>
+      </div>
+      <div class="arrow"><span class="flow-num">9</span> Redirect thanh toán</div>
+      <div class="arrow"><span class="flow-num">10a</span> IPN/Webhook → API Gateway &nbsp;|&nbsp; <span class="flow-num">10b</span> Return URL → User</div>
+    </div>
+  </div>
+
+  <h2>Luồng đánh số (theo sơ đồ nhóm)</h2>
+  <ol class="flow">
+    <li><span class="flow-num">1</span> User/Admin/Staff truy cập HTTPS qua Route 53 → CloudFront → WAF → S3 (SPA).</li>
+    <li><span class="flow-num">2</span> Đăng nhập Cognito (User hoặc Admin pool) → nhận JWT.</li>
+    <li><span class="flow-num">3</span> Frontend gọi API Gateway kèm JWT.</li>
+    <li><span class="flow-num">4</span> API Gateway invoke Lambda Service tương ứng.</li>
+    <li><span class="flow-num">5</span> Lambda đọc/ghi Data Layer (Redis, DynamoDB, RDS qua Proxy).</li>
+    <li><span class="flow-num">7</span> Sau booking/payment thành công → publish event EventBridge.</li>
+    <li><span class="flow-num">8</span> EventBridge route → SQS FIFO (lỗi → DLQ).</li>
+    <li><span class="flow-num">9</span> Payment Lambda redirect sang Payment Gateway (ngoài AWS).</li>
+    <li><span class="flow-num">10a</span> IPN/Webhook callback về API Gateway · <span class="flow-num">10b</span> User quay lại web.</li>
+    <li><span class="flow-num">11</span> QR Generator Lambda tạo QR, lưu S3.</li>
+    <li><span class="flow-num">12–13</span> Notification Lambda lấy QR từ S3 → SES gửi email vé.</li>
+    <li><span class="flow-num">14–15</span> Staff scan QR → Check-in Lambda xác thực → trả kết quả.</li>
+    <li><span class="flow-num">16</span> CodePipeline deploy Lambda từ CodeCommit.</li>
+    <li><span class="flow-num">17–18</span> CloudWatch logs/metrics → Alarm → SNS → Developer.</li>
+  </ol>
+
+  <div class="note">
+    <strong>Đúng chuẩn mentor FCAJ:</strong> CloudFront/Route 53/WAF <em>ngoài</em> Region ·
+    Payment Gateway <em>ngoài</em> AWS ·
+    SES <em>không</em> nối thẳng DynamoDB — qua Lambda + SQS/EventBridge ·
+    Cần bảng <strong>chi phí</strong> (AWS Pricing Calculator).
+  </div>
+
+  <h2>Bảng dịch vụ AWS</h2>
+  <table>
+    <tr><th>Khối</th><th>Dịch vụ</th><th>Vai trò</th></tr>
+    <tr><td>Frontend</td><td>Route 53, CloudFront, WAF, S3</td><td>CDN, bảo mật, host SPA</td></tr>
+    <tr><td>Auth</td><td>Cognito</td><td>User + Admin, JWT</td></tr>
+    <tr><td>API</td><td>API Gateway</td><td>REST/HTTP API, authorizer</td></tr>
+    <tr><td>Compute</td><td>Lambda × 7</td><td>Nghiệp vụ serverless</td></tr>
+    <tr><td>Data</td><td>Redis, DynamoDB, RDS MySQL, RDS Proxy, Backup</td><td>Cache ghế, NoSQL, SQL chính</td></tr>
+    <tr><td>Async</td><td>EventBridge, SQS FIFO, DLQ</td><td>Event-driven sau thanh toán</td></tr>
+    <tr><td>Ticket</td><td>S3, SES</td><td>QR image, email vé</td></tr>
+    <tr><td>Ops</td><td>CloudWatch, SNS</td><td>Giám sát, cảnh báo</td></tr>
+    <tr><td>CI/CD</td><td>CodeCommit, Pipeline, Build</td><td>Deploy tự động</td></tr>
+  </table>
+
+</body>
+</html>

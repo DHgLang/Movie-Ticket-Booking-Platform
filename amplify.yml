@@ -18,5 +18,5 @@ applications:
           - node_modules/**/*
     env:
       variables:
-        VITE_API_URL: https://x2nxz9vcxa.execute-api.ap-southeast-1.amazonaws.com
+        VITE_API_URL: https://460oli1eg2.execute-api.ap-southeast-1.amazonaws.com
         VITE_TMDB_API_KEY: your_tmdb_key_here
