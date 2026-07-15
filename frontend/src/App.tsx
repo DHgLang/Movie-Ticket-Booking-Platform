@@ -8,7 +8,6 @@ import MoviesPage from "./pages/Movies";
 import CinemasPage from "./pages/Cinemas";
 import BuyTicketsPage from "./pages/BuyTickets";
 import DiningPage from "./pages/Dining";
-import ShopPage from "./pages/Shop";
 import PromotionsPage from "./pages/Promotions";
 import VouchersPage from "./pages/Vouchers";
 import GroupBookingsPage from "./pages/GroupBookings";
@@ -28,6 +27,8 @@ import AdminShowtimes from "./pages/admin/Showtimes";
 import AdminBookings from "./pages/admin/Bookings";
 import AdminCinemas from "./pages/admin/Cinemas";
 import AdminSettingsPage from "./pages/admin/Settings";
+import AdminVouchers from "./pages/admin/Vouchers";
+import AdminGiftCards from "./pages/admin/GiftCards";
 import "./index.css";
 
 function RumPageViewTracker() {
@@ -58,6 +59,8 @@ export default function App() {
           <Route path="movies" element={<AdminMovies />} />
           <Route path="showtimes" element={<AdminShowtimes />} />
           <Route path="bookings" element={<AdminBookings />} />
+          <Route path="vouchers" element={<AdminVouchers />} />
+          <Route path="giftcards" element={<AdminGiftCards />} />
           <Route path="cinemas" element={<AdminCinemas />} />
           <Route path="settings" element={<AdminSettingsPage />} />
         </Route>
@@ -69,7 +72,6 @@ export default function App() {
           <Route path="cinemas" element={<CinemasPage />} />
           <Route path="buy-tickets" element={<BuyTicketsPage />} />
           <Route path="dining" element={<DiningPage />} />
-          <Route path="shop" element={<ShopPage />} />
           <Route path="promotions" element={<PromotionsPage />} />
           <Route path="vouchers" element={<VouchersPage />} />
           <Route path="group-bookings" element={<GroupBookingsPage />} />
@@ -80,6 +82,7 @@ export default function App() {
           <Route path="payment/mock" element={<PaymentMockPage />} />
           <Route path="login" element={<LoginPage />} />
           <Route path="account" element={<AccountPage />} />
+          <Route path="*" element={<HomePage />} />
         </Route>
       </Routes>
     </BrowserRouter>

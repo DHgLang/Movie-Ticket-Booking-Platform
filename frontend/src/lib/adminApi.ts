@@ -2,10 +2,13 @@ import type {
   AdminSettings,
   Booking,
   Cinema,
+  GiftCard,
+  GiftCardTransaction,
   Movie,
   RevenueReport,
   Screen,
   TrafficMetrics,
+  Voucher,
 } from "../../../shared/types";
 import { request, type EnrichedShowtime } from "./api";
 import { moviePosterSrc } from "../../../shared/movieHelpers";
@@ -97,6 +100,42 @@ export const adminApi = {
       method: "PUT",
       body: JSON.stringify(body),
     }),
+
+  vouchers: () => request<{ items: Voucher[] }>("/admin/vouchers"),
+  createVoucher: (body: Partial<Voucher>) =>
+    request<Voucher>("/admin/vouchers", { method: "POST", body: JSON.stringify(body) }),
+  updateVoucher: (code: string, body: Partial<Voucher>) =>
+    request<Voucher>(`/admin/vouchers/${encodeURIComponent(code)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  deleteVoucher: (code: string) =>
+    request<{ deleted: boolean }>(`/admin/vouchers/${encodeURIComponent(code)}`, {
+      method: "DELETE",
+    }),
+
+  giftCards: () => request<{ items: GiftCard[] }>("/admin/giftcards"),
+  issueGiftCard: (body: { code?: string; balance: number; issuedBy?: string; note?: string }) =>
+    request<GiftCard>("/admin/giftcards", { method: "POST", body: JSON.stringify(body) }),
+  lockGiftCard: (code: string, actor = "admin") =>
+    request<GiftCard>(`/admin/giftcards/${encodeURIComponent(code)}/lock`, {
+      method: "POST",
+      body: JSON.stringify({ actor }),
+    }),
+  unlockGiftCard: (code: string, actor = "admin") =>
+    request<GiftCard>(`/admin/giftcards/${encodeURIComponent(code)}/unlock`, {
+      method: "POST",
+      body: JSON.stringify({ actor }),
+    }),
+  adjustGiftCard: (code: string, body: { amount: number; actor?: string; note?: string }) =>
+    request<GiftCard>(`/admin/giftcards/${encodeURIComponent(code)}/adjust`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  giftCardHistory: (code: string) =>
+    request<{ items: GiftCardTransaction[] }>(
+      `/admin/giftcards/${encodeURIComponent(code)}/history`
+    ),
 
   posterSrc(movie: Movie, posterCdnBase?: string) {
     return moviePosterSrc(movie, posterCdnBase);

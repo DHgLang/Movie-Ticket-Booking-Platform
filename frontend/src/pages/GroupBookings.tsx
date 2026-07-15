@@ -1,12 +1,26 @@
 import { useState, type FormEvent } from "react";
 import PageShell from "../components/PageShell";
+import { api } from "../lib/api";
 
 export default function GroupBookingsPage() {
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setSent(true);
+    setLoading(true);
+    setError("");
+    const form = new FormData(e.currentTarget);
+    const body = Object.fromEntries(form.entries()) as Record<string, string>;
+    try {
+      await api.submitGroupBooking(body);
+      setSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not submit enquiry");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -20,7 +34,7 @@ export default function GroupBookingsPage() {
           <p>Our team will contact you within 2 business days.</p>
         </div>
       ) : (
-        <form className="gv-contact-form" onSubmit={onSubmit}>
+        <form className="gv-contact-form" onSubmit={(e) => void onSubmit(e)}>
           <label>
             Organisation / Company
             <input name="org" required placeholder="Company name" />
@@ -46,8 +60,9 @@ export default function GroupBookingsPage() {
             Event details
             <textarea name="details" rows={4} placeholder="Date, format, catering needs…" />
           </label>
-          <button type="submit" className="gv-btn-gold">
-            Submit enquiry
+          {error && <p className="error">{error}</p>}
+          <button type="submit" className="gv-btn-gold" disabled={loading}>
+            {loading ? "Sending…" : "Submit enquiry"}
           </button>
         </form>
       )}
@@ -59,7 +74,7 @@ export default function GroupBookingsPage() {
         </article>
         <article className="gv-feature-card">
           <h3>Corporate venue hire</h3>
-          <p>Product launches, town halls and team building at GV cinemas.</p>
+          <p>Product launches, town halls and team building at Spirit Movie cinemas.</p>
         </article>
       </div>
     </PageShell>

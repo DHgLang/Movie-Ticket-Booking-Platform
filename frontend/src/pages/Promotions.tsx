@@ -1,35 +1,39 @@
+import { useEffect, useState } from "react";
 import PageShell from "../components/PageShell";
-
-const promos = [
-  {
-    title: "Tuesday Movie Treats",
-    desc: "Enjoy discounted tickets every Tuesday for Spirit Movie members.",
-    code: "TUESDAY10",
-  },
-  {
-    title: "Student Bundle",
-    desc: "Valid student ID — ticket + regular popcorn from 11.90 USD.",
-    code: "STUDENT",
-  },
-  {
-    title: "Family Package",
-    desc: "4 tickets + 2 large drinks + 1 popcorn to share.",
-    code: "FAMILY4",
-  },
-];
+import { api } from "../lib/api";
+import type { Voucher } from "../../../shared/types";
 
 export default function PromotionsPage() {
+  const [items, setItems] = useState<Voucher[]>([]);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api
+      .getPromotions()
+      .then((res) => setItems(res.items))
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load promotions"));
+  }, []);
+
   return (
-    <PageShell title="Promotions" subtitle="Latest deals and seasonal offers.">
-      <div className="gv-promo-list">
-        {promos.map((p) => (
-          <article key={p.title} className="gv-promo-card">
-            <div className="gv-promo-banner" />
-            <div>
-              <h3>{p.title}</h3>
-              <p>{p.desc}</p>
-              <code className="gv-code">{p.code}</code>
-            </div>
+    <PageShell
+      title="Promotions"
+      subtitle="Active movie vouchers available to select at checkout."
+    >
+      {error && <p className="error">{error}</p>}
+      {!error && items.length === 0 && <p className="gv-meta">No active promotions right now.</p>}
+      <div className="gv-promo-grid">
+        {items.map((promo) => (
+          <article key={promo.code} className="gv-promo-card">
+            <h3>{promo.name}</h3>
+            <p>
+              {promo.discountType === "PERCENT"
+                ? `${promo.value}% off`
+                : `USD ${promo.value.toFixed(2)} off`}
+            </p>
+            <p className="gv-meta">
+              Valid {new Date(promo.startsAt).toLocaleDateString()} –{" "}
+              {new Date(promo.endsAt).toLocaleDateString()}
+            </p>
           </article>
         ))}
       </div>

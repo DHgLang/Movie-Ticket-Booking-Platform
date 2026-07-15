@@ -5,6 +5,7 @@ import { buildRevenueReport } from "../../../shared/reports.ts";
 import { normalizeMovieInput } from "../../../shared/movieAdmin.ts";
 import { db, createId, enrichShowtime } from "./mockStore.ts";
 import { isShowtimeBookable } from "../../../shared/showtimeCutoff.ts";
+import { findGiftCard, findVoucher, issueGiftCard, normalizeVoucherInput } from "./mockCommerce.ts";
 
 let adminSettings: AdminSettings = {};
 
@@ -258,6 +259,131 @@ export function handleMockAdmin(
   if (method === "PUT" && path === "/admin/settings") {
     adminSettings = { ...adminSettings, ...body };
     json(res, 200, adminSettings);
+    return true;
+  }
+
+  if (method === "GET" && path === "/admin/vouchers") {
+    json(res, 200, { items: db.vouchers });
+    return true;
+  }
+
+  if (method === "POST" && path === "/admin/vouchers") {
+    const voucher = normalizeVoucherInput(body);
+    if (!voucher.code) {
+      json(res, 400, { error: "code required" });
+      return true;
+    }
+    if (findVoucher(voucher.code)) {
+      json(res, 409, { error: "Voucher code already exists" });
+      return true;
+    }
+    db.vouchers.push(voucher);
+    json(res, 201, voucher);
+    return true;
+  }
+
+  const voucherMatch = path.match(/^\/admin\/vouchers\/([^/]+)$/);
+  if (voucherMatch) {
+    const code = decodeURIComponent(voucherMatch[1]).toUpperCase();
+    const existing = findVoucher(code);
+    if (!existing) {
+      json(res, 404, { error: "Voucher not found" });
+      return true;
+    }
+    if (method === "PUT") {
+      const updated = normalizeVoucherInput({ ...body, code }, existing);
+      Object.assign(existing, updated);
+      json(res, 200, existing);
+      return true;
+    }
+    if (method === "DELETE") {
+      db.vouchers = db.vouchers.filter((v) => v.code.toUpperCase() !== code);
+      json(res, 200, { deleted: true });
+      return true;
+    }
+  }
+
+  if (method === "GET" && path === "/admin/giftcards") {
+    json(res, 200, { items: db.giftCards });
+    return true;
+  }
+
+  if (method === "POST" && path === "/admin/giftcards") {
+    const balance = Number(body.balance ?? 0);
+    const issuedBy = String(body.issuedBy ?? "admin");
+    if (!(balance >= 0)) {
+      json(res, 400, { error: "balance must be >= 0" });
+      return true;
+    }
+    const code = body.code ? String(body.code) : undefined;
+    if (code && findGiftCard(code)) {
+      json(res, 409, { error: "Gift card code already exists" });
+      return true;
+    }
+    const card = issueGiftCard({
+      code,
+      balance,
+      issuedBy,
+      note: body.note ? String(body.note) : undefined,
+    });
+    json(res, 201, card);
+    return true;
+  }
+
+  const giftLock = path.match(/^\/admin\/giftcards\/([^/]+)\/(lock|unlock)$/);
+  if (giftLock && method === "POST") {
+    const code = decodeURIComponent(giftLock[1]).toUpperCase();
+    const action = giftLock[2];
+    const card = findGiftCard(code);
+    if (!card) {
+      json(res, 404, { error: "Gift card not found" });
+      return true;
+    }
+    card.status = action === "lock" ? "LOCKED" : "ACTIVE";
+    card.updatedAt = new Date().toISOString();
+    db.giftCardTxs.push({
+      id: createId("gtx"),
+      giftCardCode: card.code,
+      amount: 0,
+      type: action === "lock" ? "LOCK" : "UNLOCK",
+      actor: String(body.actor ?? "admin"),
+      createdAt: new Date().toISOString(),
+    });
+    json(res, 200, card);
+    return true;
+  }
+
+  const giftAdjust = path.match(/^\/admin\/giftcards\/([^/]+)\/adjust$/);
+  if (giftAdjust && method === "POST") {
+    const code = decodeURIComponent(giftAdjust[1]).toUpperCase();
+    const card = findGiftCard(code);
+    if (!card) {
+      json(res, 404, { error: "Gift card not found" });
+      return true;
+    }
+    const delta = Number(body.amount ?? 0);
+    card.balance = Math.max(0, Math.round((card.balance + delta) * 100) / 100);
+    card.updatedAt = new Date().toISOString();
+    db.giftCardTxs.push({
+      id: createId("gtx"),
+      giftCardCode: card.code,
+      amount: Math.abs(delta),
+      type: "ADJUST",
+      actor: String(body.actor ?? "admin"),
+      note: body.note ? String(body.note) : undefined,
+      createdAt: new Date().toISOString(),
+    });
+    json(res, 200, card);
+    return true;
+  }
+
+  const giftHistory = path.match(/^\/admin\/giftcards\/([^/]+)\/history$/);
+  if (giftHistory && method === "GET") {
+    const code = decodeURIComponent(giftHistory[1]).toUpperCase();
+    const items = db.giftCardTxs
+      .filter((tx) => tx.giftCardCode.toUpperCase() === code)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    json(res, 200, { items });
     return true;
   }
 

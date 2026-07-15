@@ -22,6 +22,7 @@ import {
 import { fetchTmdbRuntime, getCachedRuntime } from "./tmdb";
 import { isShowtimeBookable, SHOWTIME_CLOSED_MSG } from "../../../shared/showtimeCutoff";
 import { type DailySchedule, vnDayKey, showtimeMovieId } from "../../../shared/dailySchedule";
+import * as commerce from "./commerce";
 
 const TABLE = process.env.STORE_TABLE_NAME ?? "";
 const POSTER_BUCKET = process.env.POSTER_BUCKET_NAME ?? "";
@@ -435,10 +436,25 @@ export async function resumeOrCreatePendingBooking(input: {
   userId: string;
   seats: string[];
   totalAmount: number;
+  subtotalAmount?: number;
+  discountAmount?: number;
+  giftCardAmount?: number;
+  voucherCode?: string;
+  giftCardCode?: string;
 }): Promise<{ bookingId: string; ticketId: string; resumed: boolean }> {
   const existing = await findPendingBooking(input.userId, input.showtimeId);
   if (existing) {
     if (sameSeats(existing.seats, input.seats)) {
+      const updated: Booking = {
+        ...existing,
+        totalAmount: input.totalAmount,
+        subtotalAmount: input.subtotalAmount,
+        discountAmount: input.discountAmount,
+        giftCardAmount: input.giftCardAmount,
+        voucherCode: input.voucherCode,
+        giftCardCode: input.giftCardCode,
+      };
+      await putItem(PK.BOOKING, existing.id, updated);
       const tickets = await listByPk<Ticket>(PK.TICKET);
       const ticket = tickets.find((t) => t.bookingId === existing.id);
       return {
@@ -457,6 +473,11 @@ export async function resumeOrCreatePendingBooking(input: {
     userId: input.userId,
     seats: input.seats,
     totalAmount: input.totalAmount,
+    subtotalAmount: input.subtotalAmount,
+    discountAmount: input.discountAmount,
+    giftCardAmount: input.giftCardAmount,
+    voucherCode: input.voucherCode,
+    giftCardCode: input.giftCardCode,
   });
   return { bookingId: created.bookingId, ticketId: created.ticketId, resumed: false };
 }
@@ -467,6 +488,11 @@ export async function createPendingBooking(input: {
   userId: string;
   seats: string[];
   totalAmount: number;
+  subtotalAmount?: number;
+  discountAmount?: number;
+  giftCardAmount?: number;
+  voucherCode?: string;
+  giftCardCode?: string;
 }) {
   await requireBookableShowtime(input.showtimeId);
   const ticketId = createId("tk");
@@ -480,6 +506,11 @@ export async function createPendingBooking(input: {
     seats: input.seats,
     status: "PENDING",
     totalAmount: input.totalAmount,
+    subtotalAmount: input.subtotalAmount,
+    discountAmount: input.discountAmount,
+    giftCardAmount: input.giftCardAmount,
+    voucherCode: input.voucherCode,
+    giftCardCode: input.giftCardCode,
     createdAt,
   };
 
@@ -508,6 +539,7 @@ export async function finalizeBookingAfterPayment(bookingId: string) {
 
   const updated: Booking = { ...booking, status: "CONFIRMED" };
   await putItem(PK.BOOKING, bookingId, updated);
+  await commerce.redeemGiftCardForBooking(updated, booking.userId);
 
   for (const seat of booking.seats) {
     await deleteByPkSk(PK.LOCK, seatKey(booking.showtimeId, seat));
@@ -571,6 +603,27 @@ export async function confirmBooking(bookingId: string) {
 export async function listBookings(): Promise<Booking[]> {
   await ensureSeeded();
   return listByPk<Booking>(PK.BOOKING);
+}
+
+/** Bookings for one user, enriched with ticket + movie info (parity with local mock). */
+export async function listUserBookings(userId: string) {
+  const [bookings, tickets] = await Promise.all([listBookings(), listByPk<Ticket>(PK.TICKET)]);
+  const mine = bookings
+    .filter((b) => b.userId === userId && b.status !== "CANCELLED")
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  return Promise.all(
+    mine.map(async (b) => {
+      const ticket = tickets.find((t) => t.bookingId === b.id);
+      const st = await getItem<Showtime>(PK.SHOWTIME, b.showtimeId);
+      const enriched = st ? await enrichShowtime(st) : null;
+      return {
+        ...b,
+        ticketId: ticket?.id,
+        movieTitle: enriched?.movieTitle,
+        startsAt: st?.startsAt,
+      };
+    })
+  );
 }
 
 export async function getTicket(id: string): Promise<{ ticket: Ticket; booking: Booking | null } | null> {

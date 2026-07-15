@@ -770,6 +770,7 @@ body { margin: 0; background: #fff; }
 }
 
 .gv-dining-img {
+  width: 100%;
   height: 140px;
   border-radius: 4px;
   margin-bottom: 12px;
@@ -804,39 +805,169 @@ body { margin: 0; background: #fff; }
   margin-bottom: 8px;
 }
 
-/* Shop */
-.gv-shop-grid {
+/* Promotions */
+.gv-promo-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 20px;
 }
 
-.gv-shop-card {
-  border: 1px solid var(--gv-border);
-  border-radius: 4px;
-  padding: 16px;
-}
-
-.gv-shop-img {
-  height: 160px;
-  background: linear-gradient(135deg, #333, #555);
-  border-radius: 4px;
-  margin-bottom: 12px;
-}
-
-.gv-shop-card h3 { margin: 8px 0; font-size: 1rem; }
-
-/* Promotions */
 .gv-promo-list { display: flex; flex-direction: column; gap: 16px; }
 
 .gv-promo-card {
-  display: flex;
-  gap: 20px;
   border: 1px solid var(--gv-border);
   border-radius: 4px;
-  overflow: hidden;
+  padding: 16px;
   background: #fff;
 }
+
+.gv-promo-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.gv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+  font-size: 0.9rem;
+}
+
+.gv-field input,
+.gv-admin-form input,
+.gv-admin-form select,
+.gv-admin-form textarea {
+  border: 1px solid var(--gv-border);
+  border-radius: 4px;
+  padding: 8px 10px;
+}
+
+.gv-voucher-trigger {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--gv-border);
+  border-radius: 4px;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.gv-voucher-trigger:hover { border-color: var(--gv-gold-dark); }
+
+.gv-voucher-picker {
+  border: 1px solid var(--gv-border);
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+  margin: -4px 0 12px;
+  overflow: hidden;
+}
+
+.gv-voucher-picker-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--gv-border);
+}
+
+.gv-voucher-clear {
+  border: 0;
+  background: transparent;
+  color: var(--gv-gold-dark);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.gv-voucher-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px;
+  border: 0;
+  border-bottom: 1px solid var(--gv-border);
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.gv-voucher-option:last-child { border-bottom: 0; }
+.gv-voucher-option:hover:not(:disabled) { background: rgb(232 163 23 / 8%); }
+.gv-voucher-option--selected { background: rgb(232 163 23 / 12%); }
+.gv-voucher-option:disabled { cursor: not-allowed; opacity: 0.58; }
+
+.gv-voucher-option > span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.gv-voucher-option small { color: #666; }
+.gv-voucher-option small.error { color: #b42318; }
+.gv-voucher-radio { color: var(--gv-gold-dark); font-size: 1.2rem; }
+
+.gv-checkout-breakdown {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  font-size: 0.92rem;
+}
+
+.gv-checkout-breakdown div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.gv-order-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.gv-order-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  border-top: 1px solid var(--gv-border);
+  padding-top: 10px;
+}
+.gv-admin-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 16px 0 24px;
+  align-items: end;
+}
+
+.gv-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gv-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Promotions legacy layout helpers */
+.gv-promo-list { display: flex; flex-direction: column; gap: 16px; }
 
 .gv-promo-banner {
   width: 180px;
@@ -1017,6 +1148,84 @@ body { margin: 0; background: #fff; }
   border: 2px dashed var(--gv-gold-dark);
   word-break: break-all;
 }
+
+.qr-box--image {
+  background: #fff;
+  display: flex;
+  justify-content: center;
+}
+
+.gv-ticket-details {
+  text-align: left;
+  border-top: 1px solid var(--gv-border);
+  border-bottom: 1px solid var(--gv-border);
+  padding: 10px 0;
+  margin-bottom: 14px;
+}
+
+.gv-ticket-details p { margin: 4px 0; }
+
+/* Mock payment page */
+.gv-pay-summary {
+  text-align: left;
+  border: 1px solid var(--gv-border);
+  border-radius: 4px;
+  padding: 12px 14px;
+  margin: 16px 0;
+}
+
+.gv-pay-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+}
+
+.gv-pay-row--discount { color: #1a7f37; }
+
+.gv-pay-row--total {
+  border-top: 1px solid var(--gv-border);
+  margin-top: 6px;
+  padding-top: 8px;
+  font-weight: 700;
+}
+
+.gv-pay-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.gv-pay-method {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--gv-border);
+  border-radius: 4px;
+  padding: 12px 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.gv-pay-method:hover { border-color: var(--gv-gold-dark); }
+
+.gv-pay-method--active {
+  border-color: var(--gv-gold-dark);
+  background: rgb(232 163 23 / 8%);
+}
+
+.gv-pay-method input { accent-color: var(--gv-gold-dark); }
+
+.gv-pay-method-icon { font-size: 1.4rem; }
+
+.gv-pay-method-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.gv-pay-method-text small { color: #777; }
 
 /* Admin */
 .gv-admin-shell {

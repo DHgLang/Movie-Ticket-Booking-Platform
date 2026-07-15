@@ -70,16 +70,6 @@ export const gvNav: NavItem[] = [
     ),
   },
   {
-    to: "/shop",
-    label: "Shop Merchandise",
-    icon: (
-      <svg {...iconProps}>
-        <path d="M12 18l4-8h16l4 8v20H12V18z" fill="none" stroke="currentColor" strokeWidth="2.5" />
-        <path d="M18 18c0-4 3-6 6-6s6 2 6 6" fill="none" stroke="currentColor" strokeWidth="2" />
-      </svg>
-    ),
-  },
-  {
     to: "/promotions",
     label: "Promotions",
     icon: (

@@ -1,12 +1,15 @@
 import type {
   Booking,
   Cinema,
+  GiftCard,
+  GiftCardTransaction,
   Movie,
   PaymentResult,
   Screen,
   SeatLock,
   Showtime,
   Ticket,
+  Voucher,
 } from "../../../shared/types.ts";
 import {
   generateShowtimes,
@@ -91,6 +94,70 @@ export const db = {
   tickets: [] as Ticket[],
   locks: new Map<string, SeatLock>(),
   payments: [] as PaymentResult[],
+  vouchers: [
+    {
+      code: "TUESDAY10",
+      name: "Tuesday 10% Off",
+      discountType: "PERCENT",
+      value: 10,
+      startsAt: "2026-01-01T00:00:00.000Z",
+      endsAt: "2027-12-31T23:59:59.000Z",
+      isActive: true,
+      createdAt: now(),
+      updatedAt: now(),
+    },
+    {
+      code: "FAMILY4",
+      name: "Family Pack Discount",
+      discountType: "FIXED",
+      value: 4,
+      startsAt: "2026-01-01T00:00:00.000Z",
+      endsAt: "2027-12-31T23:59:59.000Z",
+      isActive: true,
+      createdAt: now(),
+      updatedAt: now(),
+    },
+  ] as Voucher[],
+  giftCards: [
+    {
+      code: "GIFT100",
+      balance: 100,
+      status: "ACTIVE",
+      issuedBy: "admin-seed",
+      note: "Demo gift card",
+      createdAt: now(),
+      updatedAt: now(),
+    },
+    {
+      code: "GIFT25",
+      balance: 25,
+      status: "ACTIVE",
+      issuedBy: "admin-seed",
+      note: "Small demo balance",
+      createdAt: now(),
+      updatedAt: now(),
+    },
+  ] as GiftCard[],
+  giftCardTxs: [
+    {
+      id: "gtx_seed1",
+      giftCardCode: "GIFT100",
+      amount: 100,
+      type: "ISSUE",
+      actor: "admin-seed",
+      note: "Initial issue",
+      createdAt: now(),
+    },
+    {
+      id: "gtx_seed2",
+      giftCardCode: "GIFT25",
+      amount: 25,
+      type: "ISSUE",
+      actor: "admin-seed",
+      note: "Initial issue",
+      createdAt: now(),
+    },
+  ] as GiftCardTransaction[],
 };
 
 export function seatKey(showtimeId: string, seat: string) {

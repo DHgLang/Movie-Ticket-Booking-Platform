@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { adminApi } from "../../lib/adminApi";
 import { tmdb, type TmdbMovie } from "../../lib/tmdb";
 import {
@@ -102,18 +102,18 @@ export default function AdminMovies() {
       ? nowShowing
       : comingSoon;
 
-  const load = () => {
+  const load = useCallback(() => {
     fetchAdminCatalog(archivedView)
       .then((r) => {
         setNowShowing(r.nowShowing);
         setComingSoon(r.comingSoon);
       })
       .catch((e) => setErr(e instanceof Error ? e.message : "Load failed"));
-  };
+  }, [archivedView]);
 
   useEffect(() => {
     load();
-  }, [archivedView]);
+  }, [load]);
 
   useEffect(() => {
     if (!search.trim()) {

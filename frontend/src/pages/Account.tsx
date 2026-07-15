@@ -1,21 +1,31 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import PageShell from "../components/PageShell";
+import { api } from "../lib/api";
 import { getUserProfile, logout, type UserProfile } from "../lib/auth";
+
+type BookingRow = Awaited<ReturnType<typeof api.myBookings>>["items"][number];
 
 export default function AccountPage() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     getUserProfile(true)
-      .then((p) => {
+      .then(async (p) => {
         if (!p) {
           navigate("/login", { replace: true });
           return;
         }
         setProfile(p);
+        try {
+          const res = await api.myBookings(p.userId);
+          setBookings(res.items);
+        } catch {
+          setBookings([]);
+        }
       })
       .finally(() => setLoading(false));
   }, [navigate]);
@@ -51,26 +61,28 @@ export default function AccountPage() {
           </dl>
         </section>
 
-        <section className="gv-card gv-plan-card">
-          <h2>Current plan</h2>
-          <p className="gv-plan-name">{profile.plan}</p>
-          <ul className="gv-plan-features">
-            {profile.isAdmin ? (
-              <>
-                <li>Book tickets at all cinemas</li>
-                <li>Admin panel — manage movies & showtimes</li>
-                <li>View all bookings</li>
-              </>
-            ) : (
-              <>
-                <li>Book tickets online</li>
-                <li>E-ticket & QR check-in</li>
-                <li>Order history</li>
-              </>
-            )}
-          </ul>
-          {!profile.isAdmin && (
-            <p className="gv-meta">Upgrade to Gold Class at any cinema counter.</p>
+        <section className="gv-card">
+          <h2>Order history</h2>
+          {bookings.length === 0 ? (
+            <p className="gv-meta">No bookings yet.</p>
+          ) : (
+            <ul className="gv-order-list">
+              {bookings.map((b) => (
+                <li key={b.id}>
+                  <div>
+                    <strong>{b.movieTitle ?? b.showtimeId}</strong>
+                    <div className="gv-meta">
+                      {b.status} · USD {b.totalAmount.toFixed(2)} · {b.seats.join(", ")}
+                    </div>
+                  </div>
+                  {b.ticketId && (
+                    <Link to={`/ticket/${b.ticketId}`} className="gv-btn-outline">
+                      View ticket
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
           )}
         </section>
 
@@ -79,6 +91,9 @@ export default function AccountPage() {
           <div className="gv-account-actions">
             <Link to="/buy-tickets" className="gv-btn-gold">
               Buy Tickets
+            </Link>
+            <Link to="/vouchers" className="gv-btn-outline">
+              Gift Cards
             </Link>
             {profile.isAdmin && (
               <Link to="/admin" className="gv-btn-outline">

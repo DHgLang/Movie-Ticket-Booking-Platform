@@ -74,12 +74,17 @@ export const api = {
     showtimeId: string;
     userId: string;
     seats: string[];
-    totalAmount: number;
+    totalAmount?: number;
+    voucherCode?: string;
+    giftCardCode?: string;
   }) =>
-    request<{ bookingId: string; ticketId: string; amount: number }>(
-      "/payments/mock/create",
-      { method: "POST", body: JSON.stringify(body) }
-    ),
+    request<{
+      bookingId: string;
+      ticketId: string;
+      amount: number;
+      paid?: boolean;
+      quote?: import("../../../shared/types").CheckoutQuote;
+    }>("/payments/mock/create", { method: "POST", body: JSON.stringify(body) }),
 
   confirmMockPayment: (body: { bookingId: string; userId: string }) =>
     request<{ ticketId: string; bookingId: string }>("/payments/mock/confirm", {
@@ -96,16 +101,62 @@ export const api = {
   mockPayment: (body: { userId: string; amount: number }) =>
     request("/payments/mock", { method: "POST", body: JSON.stringify(body) }),
 
+  quoteCheckout: (body: {
+    showtimeId?: string;
+    seats?: string[];
+    subtotalAmount?: number;
+    voucherCode?: string;
+    giftCardCode?: string;
+  }) =>
+    request<import("../../../shared/types").CheckoutQuote>("/checkout/quote", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  getPromotions: () =>
+    request<{ items: import("../../../shared/types").Voucher[] }>("/promotions"),
+
+  getGiftCard: (code: string) =>
+    request<{ code: string; balance: number; status: string }>(
+      `/giftcards/${encodeURIComponent(code)}`
+    ),
+
+  myBookings: (userId: string) =>
+    request<{
+      items: Array<
+        import("../../../shared/types").Booking & {
+          ticketId?: string;
+          movieTitle?: string;
+          startsAt?: string;
+        }
+      >;
+    }>(`/bookings?userId=${encodeURIComponent(userId)}`),
+
+  submitGroupBooking: (body: Record<string, string>) =>
+    request<{ id: string; received: boolean; message: string }>("/group-bookings", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   createVnpayPayment: (body: {
     showtimeId: string;
     userId: string;
     seats: string[];
-    totalAmount: number;
+    totalAmount?: number;
+    voucherCode?: string;
+    giftCardCode?: string;
   }) =>
-    request<{ paymentUrl: string; bookingId: string; amountVnd: number }>(
-      "/payments/vnpay/create",
-      { method: "POST", body: JSON.stringify(body) }
-    ),
+    request<{
+      paymentUrl?: string;
+      bookingId: string;
+      ticketId?: string;
+      amountVnd?: number;
+      paid?: boolean;
+      quote?: import("../../../shared/types").CheckoutQuote;
+    }>("/payments/vnpay/create", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   confirmVnpayPayment: (params: Record<string, string>) =>
     request<{ ticketId: string; bookingId: string }>("/payments/vnpay/confirm", {
@@ -126,6 +177,12 @@ export const api = {
 
   ticketQr: (id: string) =>
     request<{ qrPayload: string; ticketId: string }>(`/tickets/${id}/qr`),
+
+  getTicket: (id: string) =>
+    request<{
+      ticket: { id: string; bookingId: string; qrCode: string };
+      booking?: import("../../../shared/types").Booking;
+    }>(`/tickets/${id}`),
 
   adminCinemas: () =>
     request<{

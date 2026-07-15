@@ -2,6 +2,7 @@ import type { APIGatewayProxyHandlerV2 } from "aws-lambda";
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { randomUUID } from "crypto";
 import * as store from "../_shared/store";
+import * as commerce from "../_shared/commerce";
 import { getTrafficMetrics } from "../_shared/cloudwatchMetrics";
 import {
   buildVnpayPaymentUrl,
@@ -146,6 +147,58 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       return json(200, { ok: true, mode: "aws", service: "booking-api", vnpayEnabled });
     }
 
+    if (method === "GET" && path === "/promotions") {
+      await commerce.ensureCommerceSeeded();
+      return json(200, { items: await commerce.listActivePromotions() });
+    }
+
+    if (method === "POST" && path === "/checkout/quote") {
+      await commerce.ensureCommerceSeeded();
+      const { showtimeId, seats, voucherCode, giftCardCode, subtotalAmount } = body as {
+        showtimeId?: string;
+        seats?: string[];
+        voucherCode?: string;
+        giftCardCode?: string;
+        subtotalAmount?: number;
+      };
+      let subtotal = Number(subtotalAmount ?? 0);
+      if (showtimeId && seats?.length) {
+        const showtime = await store.getShowtime(showtimeId);
+        if (!showtime) return json(404, { error: "Showtime not found" });
+        subtotal = Math.round(seats.length * showtime.price * 100) / 100;
+      }
+      const quote = await commerce.quoteForCheckout({
+        subtotalAmount: subtotal,
+        voucherCode,
+        giftCardCode,
+        seatCount: seats?.length ?? 0,
+      });
+      return json(200, quote);
+    }
+
+    if (method === "GET" && path.startsWith("/giftcards/")) {
+      await commerce.ensureCommerceSeeded();
+      const code = decodeURIComponent(path.split("/")[2] ?? "");
+      const card = await commerce.getGiftCard(code);
+      if (!card) return json(404, { error: "Gift card not found" });
+      return json(200, { code: card.code, balance: card.balance, status: card.status });
+    }
+
+    if (method === "GET" && path === "/bookings") {
+      const userId = event.queryStringParameters?.userId ?? "";
+      if (!userId) return json(400, { error: "userId required" });
+      return json(200, { items: await store.listUserBookings(userId) });
+    }
+
+    if (method === "POST" && path === "/group-bookings") {
+      return json(201, {
+        id: randomUUID(),
+        received: true,
+        message: "Group booking request received. Our team will contact you.",
+        payload: body,
+      });
+    }
+
     // GET /movies/overrides — admin edits + manual movies only (public merge with TMDB)
     if (method === "GET" && path === "/movies/overrides") {
       const items = await store.listMovies({ includeArchived: true });
@@ -239,44 +292,89 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       const config = getVnpayConfig(getApiBaseUrl(event), FRONTEND_URL);
       if (!config) return json(503, { error: "VNPay not configured" });
 
-      const { showtimeId, userId, seats, totalAmount } = body as {
+      const { showtimeId, userId, seats, voucherCode, giftCardCode } = body as {
         showtimeId?: string;
         userId?: string;
         seats?: string[];
-        totalAmount?: number;
+        voucherCode?: string;
+        giftCardCode?: string;
       };
-      if (!showtimeId || !userId || !seats?.length || totalAmount == null) {
-        return json(400, { error: "showtimeId, userId, seats, totalAmount required" });
+      if (!showtimeId || !userId || !seats?.length) {
+        return json(400, { error: "showtimeId, userId, seats required" });
       }
 
-      let useBookingId: string;
+      await commerce.ensureCommerceSeeded();
+      const showtime = await store.getShowtime(showtimeId);
+      if (!showtime) return json(404, { error: "Showtime not found" });
+      const subtotalAmount = Math.round(seats.length * showtime.price * 100) / 100;
+      const quote = await commerce.quoteForCheckout({
+        subtotalAmount,
+        voucherCode,
+        giftCardCode,
+        seatCount: seats.length,
+      });
+      if (commerce.quoteHasBlockingErrors(quote)) {
+        return json(400, {
+          error: quote.voucherError?.message || quote.giftCardError?.message || "Invalid promo codes",
+          quote,
+        });
+      }
+
+      let pending: { bookingId: string; ticketId: string };
       try {
-        const pending = await store.resumeOrCreatePendingBooking({
+        pending = await store.resumeOrCreatePendingBooking({
           showtimeId,
           userId,
           seats,
-          totalAmount,
+          totalAmount: quote.finalAmount,
+          subtotalAmount: quote.subtotalAmount,
+          discountAmount: quote.discountAmount,
+          giftCardAmount: quote.giftCardAmount,
+          voucherCode: quote.voucherCode,
+          giftCardCode: quote.giftCardCode,
         });
-        useBookingId = pending.bookingId;
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Booking failed";
         if (msg === store.SHOWTIME_CLOSED_MSG) return json(410, { error: msg });
         throw e;
       }
 
-      const showtime = await store.getShowtime(showtimeId);
-      const amountVnd = usdToVnd(totalAmount);
-      const ipAddr = event.requestContext?.http?.sourceIp ?? "127.0.0.1";
-      const orderInfo = `Thanh_toan_${useBookingId.replace(/-/g, "").slice(0, 12)}`;
+      if (quote.finalAmount <= 0) {
+        const result = await store.finalizeBookingAfterPayment(pending.bookingId);
+        if (!result) return json(400, { error: "Could not finalize zero-amount booking" });
+        await enqueueBooking({
+          bookingId: result.bookingId,
+          ticketId: result.ticketId,
+          showtimeId,
+          userId,
+          seats,
+          totalAmount: 0,
+        });
+        return json(200, {
+          paid: true,
+          bookingId: result.bookingId,
+          ticketId: result.ticketId,
+          quote,
+        });
+      }
 
+      const amountVnd = usdToVnd(quote.finalAmount);
+      const ipAddr = event.requestContext?.http?.sourceIp ?? "127.0.0.1";
+      const orderInfo = `Thanh_toan_${pending.bookingId.replace(/-/g, "").slice(0, 12)}`;
       const paymentUrl = buildVnpayPaymentUrl(config, {
-        txnRef: useBookingId,
+        txnRef: pending.bookingId,
         amountVnd,
         orderInfo,
         ipAddr,
       });
 
-      return json(200, { paymentUrl, bookingId: useBookingId, amountVnd });
+      return json(200, {
+        paymentUrl,
+        bookingId: pending.bookingId,
+        amountVnd,
+        paid: false,
+        quote,
+      });
     }
 
     // POST /payments/vnpay/confirm — frontend return URL handler
@@ -529,6 +627,144 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     if (method === "PUT" && path === "/admin/settings") {
       return json(200, await store.saveAdminSettings(body));
+    }
+
+    if (method === "GET" && path === "/admin/vouchers") {
+      await commerce.ensureCommerceSeeded();
+      return json(200, { items: await commerce.listVouchers() });
+    }
+
+    if (method === "POST" && path === "/admin/vouchers") {
+      await commerce.ensureCommerceSeeded();
+      const nowIso = new Date().toISOString();
+      const code = String(body.code ?? "").trim().toUpperCase();
+      if (!code) return json(400, { error: "code required" });
+      if (await commerce.getVoucher(code)) return json(409, { error: "Voucher code already exists" });
+      const voucher = await commerce.putVoucher({
+        code,
+        name: String(body.name ?? code),
+        discountType: (body.discountType as "PERCENT" | "FIXED") ?? "PERCENT",
+        value: Number(body.value ?? 0),
+        startsAt: String(body.startsAt ?? nowIso),
+        endsAt: String(body.endsAt ?? "2099-12-31T23:59:59.000Z"),
+        isActive: body.isActive == null ? true : Boolean(body.isActive),
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+      return json(201, voucher);
+    }
+
+    const adminVoucherMatch = path.match(/^\/admin\/vouchers\/([^/]+)$/);
+    if (adminVoucherMatch) {
+      await commerce.ensureCommerceSeeded();
+      const code = decodeURIComponent(adminVoucherMatch[1]).toUpperCase();
+      const existing = await commerce.getVoucher(code);
+      if (!existing) return json(404, { error: "Voucher not found" });
+      if (method === "PUT") {
+        const voucher = await commerce.putVoucher({
+          ...existing,
+          name: String(body.name ?? existing.name),
+          discountType: (body.discountType as "PERCENT" | "FIXED") ?? existing.discountType,
+          value: Number(body.value ?? existing.value),
+          startsAt: String(body.startsAt ?? existing.startsAt),
+          endsAt: String(body.endsAt ?? existing.endsAt),
+          isActive: body.isActive == null ? existing.isActive : Boolean(body.isActive),
+          updatedAt: new Date().toISOString(),
+        });
+        return json(200, voucher);
+      }
+      if (method === "DELETE") {
+        await commerce.deleteVoucher(code);
+        return json(200, { deleted: true });
+      }
+    }
+
+    if (method === "GET" && path === "/admin/giftcards") {
+      await commerce.ensureCommerceSeeded();
+      return json(200, { items: await commerce.listGiftCards() });
+    }
+
+    if (method === "POST" && path === "/admin/giftcards") {
+      await commerce.ensureCommerceSeeded();
+      const nowIso = new Date().toISOString();
+      const code = String(body.code ?? commerce.createCommerceId("GIFT")).trim().toUpperCase();
+      if (await commerce.getGiftCard(code)) return json(409, { error: "Gift card code already exists" });
+      const balance = Math.max(0, Math.round(Number(body.balance ?? 0) * 100) / 100);
+      const card = await commerce.putGiftCard({
+        code,
+        balance,
+        status: "ACTIVE",
+        issuedBy: String(body.issuedBy ?? "admin"),
+        note: body.note ? String(body.note) : undefined,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+      await commerce.addGiftCardTx({
+        id: commerce.createCommerceId("gtx"),
+        giftCardCode: card.code,
+        amount: balance,
+        type: "ISSUE",
+        actor: String(body.issuedBy ?? "admin"),
+        note: body.note ? String(body.note) : undefined,
+        createdAt: nowIso,
+      });
+      return json(201, card);
+    }
+
+    const giftAction = path.match(/^\/admin\/giftcards\/([^/]+)\/(lock|unlock|adjust|history)$/);
+    if (giftAction) {
+      await commerce.ensureCommerceSeeded();
+      const code = decodeURIComponent(giftAction[1]).toUpperCase();
+      const action = giftAction[2];
+      const card = await commerce.getGiftCard(code);
+      if (!card) return json(404, { error: "Gift card not found" });
+      if (action === "history" && method === "GET") {
+        return json(200, { items: await commerce.listGiftCardHistory(code) });
+      }
+      if (action === "lock" && method === "POST") {
+        card.status = "LOCKED";
+        card.updatedAt = new Date().toISOString();
+        await commerce.putGiftCard(card);
+        await commerce.addGiftCardTx({
+          id: commerce.createCommerceId("gtx"),
+          giftCardCode: card.code,
+          amount: 0,
+          type: "LOCK",
+          actor: String(body.actor ?? "admin"),
+          createdAt: new Date().toISOString(),
+        });
+        return json(200, card);
+      }
+      if (action === "unlock" && method === "POST") {
+        card.status = "ACTIVE";
+        card.updatedAt = new Date().toISOString();
+        await commerce.putGiftCard(card);
+        await commerce.addGiftCardTx({
+          id: commerce.createCommerceId("gtx"),
+          giftCardCode: card.code,
+          amount: 0,
+          type: "UNLOCK",
+          actor: String(body.actor ?? "admin"),
+          createdAt: new Date().toISOString(),
+        });
+        return json(200, card);
+      }
+      if (action === "adjust" && method === "POST") {
+        const delta = Number(body.amount ?? 0);
+        card.balance = Math.max(0, Math.round((card.balance + delta) * 100) / 100);
+        card.updatedAt = new Date().toISOString();
+        await commerce.putGiftCard(card);
+        await commerce.addGiftCardTx({
+          id: commerce.createCommerceId("gtx"),
+          giftCardCode: card.code,
+          amount: Math.abs(delta),
+          type: "ADJUST",
+          actor: String(body.actor ?? "admin"),
+          note: body.note ? String(body.note) : undefined,
+          createdAt: new Date().toISOString(),
+        });
+        return json(200, card);
+      }
     }
 
     return json(404, { error: "Not found", path, method });

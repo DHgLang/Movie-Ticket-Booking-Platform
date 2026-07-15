@@ -6,6 +6,8 @@ const nav = [
   { to: "/admin/movies", label: "Quản lý phim" },
   { to: "/admin/showtimes", label: "Suất chiếu" },
   { to: "/admin/bookings", label: "Bookings" },
+  { to: "/admin/vouchers", label: "Vouchers" },
+  { to: "/admin/giftcards", label: "Gift Cards" },
   { to: "/admin/cinemas", label: "Rạp chiếu" },
   { to: "/admin/settings", label: "Cài đặt" },
 ];

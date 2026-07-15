@@ -4,6 +4,21 @@ import { isShowtimeBookable } from "../../../shared/showtimeCutoff.ts";
 import { vnDayKey, showtimeMovieId } from "../../../shared/dailySchedule.ts";
 import { handleMockAdmin } from "./mockAdmin.ts";
 import { isMovieVisibleToPublic } from "../../../shared/movieHelpers.ts";
+import {
+  activePromotions,
+  applyGiftCardRedeem,
+  findGiftCard,
+  quoteCheckout,
+  quoteHasBlockingErrors,
+} from "./mockCommerce.ts";
+import type { Booking, CheckoutQuote } from "../../../shared/types.ts";
+import {
+  buildVnpayPaymentUrl,
+  getMockVnpay,
+  isVnpaySuccess,
+  usdToVnd,
+  verifyVnpayCallback,
+} from "./mockVnpay.ts";
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -24,6 +39,107 @@ function parseBody(req: IncomingMessage): Promise<Record<string, unknown>> {
       }
     });
   });
+}
+
+type CheckoutResult =
+  | { error: true; status: number; body: Record<string, unknown> }
+  | { booking: Booking; ticketId: string; quote: CheckoutQuote };
+
+/** Shared by VNPay + mock checkout: validate, quote, resume/create the pending booking. */
+function createPendingCheckout(body: Record<string, unknown>): CheckoutResult {
+  const { showtimeId, userId, seats, voucherCode, giftCardCode } = body as {
+    showtimeId?: string;
+    userId?: string;
+    seats?: string[];
+    voucherCode?: string;
+    giftCardCode?: string;
+  };
+  if (!showtimeId || !userId || !seats?.length) {
+    return { error: true, status: 400, body: { error: "showtimeId, userId, seats required" } };
+  }
+  try {
+    requireBookableShowtime(showtimeId);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Booking failed";
+    return {
+      error: true,
+      status: msg === SHOWTIME_CLOSED_MSG ? 410 : 400,
+      body: { error: msg },
+    };
+  }
+  const showtime = db.showtimes.find((s) => s.id === showtimeId);
+  if (!showtime) return { error: true, status: 404, body: { error: "Showtime not found" } };
+
+  const subtotalAmount = Math.round(seats.length * showtime.price * 100) / 100;
+  const quote = quoteCheckout({
+    subtotalAmount,
+    voucherCode,
+    giftCardCode,
+    seatCount: seats.length,
+  });
+  if (quoteHasBlockingErrors(quote)) {
+    return {
+      error: true,
+      status: 400,
+      body: {
+        error:
+          quote.voucherError?.message || quote.giftCardError?.message || "Invalid promo codes",
+        quote,
+      },
+    };
+  }
+
+  const finalize = (booking: Booking) => {
+    if (quote.finalAmount <= 0) {
+      booking.status = "CONFIRMED";
+      applyGiftCardRedeem(booking, booking.userId);
+      for (const seat of booking.seats) db.locks.delete(seatKey(booking.showtimeId, seat));
+    }
+  };
+
+  const existing = db.bookings.find(
+    (b) => b.showtimeId === showtimeId && b.userId === userId && b.status === "PENDING"
+  );
+  if (existing) {
+    const sameSeats =
+      existing.seats.length === seats.length &&
+      [...existing.seats].sort().every((s, i) => s === [...seats].sort()[i]);
+    if (sameSeats) {
+      Object.assign(existing, {
+        subtotalAmount: quote.subtotalAmount,
+        discountAmount: quote.discountAmount,
+        giftCardAmount: quote.giftCardAmount,
+        totalAmount: quote.finalAmount,
+        voucherCode: quote.voucherCode,
+        giftCardCode: quote.giftCardCode,
+      });
+      finalize(existing);
+      const ticket = db.tickets.find((t) => t.bookingId === existing.id);
+      return { booking: existing, ticketId: ticket?.id ?? "", quote };
+    }
+    existing.status = "CANCELLED";
+  }
+
+  const bookingId = createId("bk");
+  const booking: Booking = {
+    id: bookingId,
+    showtimeId,
+    userId,
+    seats,
+    status: "PENDING",
+    totalAmount: quote.finalAmount,
+    subtotalAmount: quote.subtotalAmount,
+    discountAmount: quote.discountAmount,
+    giftCardAmount: quote.giftCardAmount,
+    voucherCode: quote.voucherCode,
+    giftCardCode: quote.giftCardCode,
+    createdAt: now(),
+  };
+  db.bookings.push(booking);
+  const ticketId = createId("tk");
+  db.tickets.push({ id: ticketId, bookingId, qrCode: `TICKET:${ticketId}:${bookingId}` });
+  finalize(booking);
+  return { booking, ticketId, quote };
 }
 
 export function mockApiMiddleware() {
@@ -50,7 +166,11 @@ export function mockApiMiddleware() {
 
     // GET /health
     if (method === "GET" && path === "/health") {
-      return json(res, 200, { ok: true, mode: "local-mock", vnpayEnabled: false });
+      return json(res, 200, {
+        ok: true,
+        mode: "local-mock",
+        vnpayEnabled: Boolean(getMockVnpay()),
+      });
     }
 
     // GET /movies
@@ -228,56 +348,83 @@ export function mockApiMiddleware() {
       return json(res, 200, { released: true });
     }
 
-    // POST /payments/mock/create — pending booking (local dev)
+    // POST /payments/vnpay/create — real VNPay sandbox redirect (local dev)
+    if (method === "POST" && path === "/payments/vnpay/create") {
+      const vnpay = getMockVnpay();
+      if (!vnpay) return json(res, 501, { error: "VNPay is not configured" });
+      const body = await parseBody(req);
+      const result = createPendingCheckout(body);
+      if ("error" in result) return json(res, result.status, result.body);
+      const { booking, ticketId, quote } = result;
+      if (booking.status === "CONFIRMED") {
+        return json(res, 200, {
+          bookingId: booking.id,
+          ticketId,
+          amount: 0,
+          paid: true,
+          quote,
+        });
+      }
+      const amountVnd = usdToVnd(booking.totalAmount);
+      const paymentUrl = buildVnpayPaymentUrl(vnpay, {
+        txnRef: booking.id,
+        amountVnd,
+        orderInfo: `Movie tickets ${booking.seats.join(" ")}`,
+      });
+      return json(res, 200, {
+        bookingId: booking.id,
+        ticketId,
+        amountVnd,
+        paymentUrl,
+        paid: false,
+        quote,
+      });
+    }
+
+    // POST /payments/vnpay/confirm — verify VNPay return params (local dev)
+    if (method === "POST" && path === "/payments/vnpay/confirm") {
+      const vnpay = getMockVnpay();
+      if (!vnpay) return json(res, 501, { error: "VNPay is not configured" });
+      const params = (await parseBody(req)) as Record<string, string>;
+      if (!verifyVnpayCallback(params, vnpay.hashSecret)) {
+        return json(res, 400, { error: "Invalid payment response." });
+      }
+      const booking = db.bookings.find((b) => b.id === params.vnp_TxnRef);
+      if (!booking) return json(res, 404, { error: "Booking not found" });
+      const ticket = db.tickets.find((t) => t.bookingId === booking.id);
+      if (booking.status === "CONFIRMED" || booking.status === "PAID") {
+        return json(res, 200, { ticketId: ticket?.id ?? "", bookingId: booking.id });
+      }
+      if (!isVnpaySuccess(params)) {
+        booking.status = "CANCELLED";
+        for (const seat of booking.seats) db.locks.delete(seatKey(booking.showtimeId, seat));
+        return json(res, 400, {
+          error: `Payment failed (code ${params.vnp_ResponseCode ?? "?"}).`,
+        });
+      }
+      const expected = usdToVnd(booking.totalAmount) * 100;
+      if (Number(params.vnp_Amount) !== expected) {
+        return json(res, 400, { error: "Payment amount mismatch." });
+      }
+      booking.status = "CONFIRMED";
+      applyGiftCardRedeem(booking, booking.userId);
+      for (const seat of booking.seats) db.locks.delete(seatKey(booking.showtimeId, seat));
+      return json(res, 200, { ticketId: ticket?.id ?? "", bookingId: booking.id });
+    }
+
+    // POST /payments/mock/create — pending booking (local dev, no VNPay creds)
     if (method === "POST" && path === "/payments/mock/create") {
       const body = await parseBody(req);
-      const { showtimeId, userId, seats, totalAmount } = body as {
-        showtimeId?: string;
-        userId?: string;
-        seats?: string[];
-        totalAmount?: number;
-      };
-      if (!showtimeId || !userId || !seats?.length || totalAmount == null) {
-        return json(res, 400, { error: "showtimeId, userId, seats, totalAmount required" });
-      }
-      try {
-        requireBookableShowtime(showtimeId);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "Booking failed";
-        return json(res, msg === SHOWTIME_CLOSED_MSG ? 410 : 400, { error: msg });
-      }
-      const existing = db.bookings.find(
-        (b) => b.showtimeId === showtimeId && b.userId === userId && b.status === "PENDING"
-      );
-      if (existing) {
-        const sameSeats =
-          existing.seats.length === seats.length &&
-          [...existing.seats].sort().every((s, i) => s === [...seats].sort()[i]);
-        if (sameSeats) {
-          const ticket = db.tickets.find((t) => t.bookingId === existing.id);
-          return json(res, 200, {
-            bookingId: existing.id,
-            ticketId: ticket?.id ?? "",
-            amount: existing.totalAmount,
-          });
-        }
-        existing.status = "CANCELLED";
-      }
-      const bookingId = createId("bk");
-      const booking = {
-        id: bookingId,
-        showtimeId,
-        userId,
-        seats,
-        status: "PENDING" as const,
-        totalAmount,
-        createdAt: now(),
-      };
-      db.bookings.push(booking);
-      const ticketId = createId("tk");
-      const qrCode = `TICKET:${ticketId}:${bookingId}`;
-      db.tickets.push({ id: ticketId, bookingId, qrCode });
-      return json(res, 200, { bookingId, ticketId, amount: totalAmount });
+      const result = createPendingCheckout(body);
+      if ("error" in result) return json(res, result.status, result.body);
+      const { booking, ticketId, quote } = result;
+      return json(res, 200, {
+        bookingId: booking.id,
+        ticketId,
+        amount: booking.status === "CONFIRMED" ? 0 : booking.totalAmount,
+        paid: booking.status === "CONFIRMED",
+        quote,
+      });
     }
 
     // POST /payments/mock/confirm
@@ -299,6 +446,7 @@ export function mockApiMiddleware() {
         return json(res, 400, { error: "Booking is not pending" });
       }
       booking.status = "CONFIRMED";
+      applyGiftCardRedeem(booking, userId);
       const payment: typeof db.payments[0] = {
         paymentId: createId("pay"),
         status: "SUCCESS",
@@ -330,11 +478,6 @@ export function mockApiMiddleware() {
         db.locks.delete(seatKey(booking.showtimeId, seat));
       }
       return json(res, 200, { cancelled: true });
-    }
-
-    // POST /payments/vnpay/create — not available locally
-    if (method === "POST" && path === "/payments/vnpay/create") {
-      return json(res, 503, { error: "VNPay not configured" });
     }
 
     // POST /payments/mock
@@ -387,6 +530,80 @@ export function mockApiMiddleware() {
       db.tickets.push({ id: ticketId, bookingId, qrCode });
       for (const seat of seats) db.locks.delete(seatKey(showtimeId, seat));
       return json(res, 202, { bookingId, ticketId, status: "CONFIRMED", qrCode });
+    }
+
+    // GET /promotions — active vouchers for public browse
+    if (method === "GET" && path === "/promotions") {
+      return json(res, 200, { items: activePromotions() });
+    }
+
+    // POST /checkout/quote
+    if (method === "POST" && path === "/checkout/quote") {
+      const body = await parseBody(req);
+      const { showtimeId, seats, voucherCode, giftCardCode, subtotalAmount } = body as {
+        showtimeId?: string;
+        seats?: string[];
+        voucherCode?: string;
+        giftCardCode?: string;
+        subtotalAmount?: number;
+      };
+      let subtotal = Number(subtotalAmount ?? 0);
+      if (showtimeId && seats?.length) {
+        const showtime = db.showtimes.find((s) => s.id === showtimeId);
+        if (!showtime) return json(res, 404, { error: "Showtime not found" });
+        subtotal = Math.round(seats.length * showtime.price * 100) / 100;
+      }
+      const quote = quoteCheckout({
+        subtotalAmount: subtotal,
+        voucherCode,
+        giftCardCode,
+        seatCount: seats?.length ?? 0,
+      });
+      return json(res, 200, quote);
+    }
+
+    // GET /giftcards/:code — public balance check
+    if (method === "GET" && path.startsWith("/giftcards/")) {
+      const code = decodeURIComponent(path.split("/")[2] ?? "");
+      const card = findGiftCard(code);
+      if (!card) return json(res, 404, { error: "Gift card not found" });
+      return json(res, 200, {
+        code: card.code,
+        balance: card.balance,
+        status: card.status,
+      });
+    }
+
+    // GET /bookings?userId=
+    if (method === "GET" && path === "/bookings") {
+      const userId = url.searchParams.get("userId") ?? "";
+      if (!userId) return json(res, 400, { error: "userId required" });
+      const items = db.bookings
+        .filter((b) => b.userId === userId && b.status !== "CANCELLED")
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+        .map((b) => {
+          const ticket = db.tickets.find((t) => t.bookingId === b.id);
+          const st = db.showtimes.find((s) => s.id === b.showtimeId);
+          return {
+            ...b,
+            ticketId: ticket?.id,
+            movieTitle: st ? enrichShowtime(st).movieTitle : undefined,
+            startsAt: st?.startsAt,
+          };
+        });
+      return json(res, 200, { items });
+    }
+
+    // POST /group-bookings — local acknowledgement store
+    if (method === "POST" && path === "/group-bookings") {
+      const body = await parseBody(req);
+      const id = createId("grp");
+      return json(res, 201, {
+        id,
+        received: true,
+        message: "Group booking request received. Our team will contact you.",
+        payload: body,
+      });
     }
 
     // GET /tickets/:id

@@ -57,8 +57,75 @@ export type Booking = {
   userId: string;
   seats: string[];
   status: BookingStatus;
+  /** Final amount charged (after voucher + gift card). */
   totalAmount: number;
+  subtotalAmount?: number;
+  discountAmount?: number;
+  giftCardAmount?: number;
+  voucherCode?: string;
+  giftCardCode?: string;
   createdAt: string;
+};
+
+export type DiscountType = "PERCENT" | "FIXED";
+
+export type Voucher = {
+  code: string;
+  name: string;
+  discountType: DiscountType;
+  value: number;
+  startsAt: string;
+  endsAt: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GiftCardStatus = "ACTIVE" | "LOCKED";
+
+export type GiftCard = {
+  code: string;
+  balance: number;
+  status: GiftCardStatus;
+  issuedBy: string;
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GiftCardTxType = "ISSUE" | "REDEEM" | "ADJUST" | "LOCK" | "UNLOCK";
+
+export type GiftCardTransaction = {
+  id: string;
+  giftCardCode: string;
+  amount: number;
+  type: GiftCardTxType;
+  bookingId?: string;
+  actor: string;
+  note?: string;
+  createdAt: string;
+};
+
+export type CheckoutFailureCode =
+  | "NOT_FOUND"
+  | "INACTIVE"
+  | "NOT_STARTED"
+  | "EXPIRED"
+  | "WRONG_DAY"
+  | "MIN_SEATS"
+  | "LOCKED"
+  | "INVALID_TYPE"
+  | "INVALID_VALUE";
+
+export type CheckoutQuote = {
+  subtotalAmount: number;
+  discountAmount: number;
+  giftCardAmount: number;
+  finalAmount: number;
+  voucherCode?: string;
+  giftCardCode?: string;
+  voucherError?: { code: CheckoutFailureCode; message: string };
+  giftCardError?: { code: CheckoutFailureCode; message: string };
 };
 
 export type Ticket = {

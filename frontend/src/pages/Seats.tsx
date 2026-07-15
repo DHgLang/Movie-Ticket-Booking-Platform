@@ -1,10 +1,12 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type EnrichedShowtime } from "../lib/api";
 import { getUserProfile } from "../lib/auth";
 import { SHOWTIME_POLL_MS } from "../lib/pollInterval";
 import { usePoll } from "../lib/usePoll";
 import { SHOWTIME_CLOSED_MSG } from "../../../shared/showtimeCutoff";
+import { validateVoucher } from "../../../shared/checkout";
+import type { CheckoutQuote, Voucher } from "../../../shared/types";
 
 function seatLabel(row: number, col: number) {
   return `${String.fromCharCode(65 + row)}${col + 1}`;
@@ -24,6 +26,11 @@ export default function SeatsPage() {
   const [myReserved, setMyReserved] = useState<string[]>([]);
   const [pendingBookingId, setPendingBookingId] = useState<string | undefined>();
   const [selected, setSelected] = useState<string[]>([]);
+  const [voucherCode, setVoucherCode] = useState("");
+  const [vouchers, setVouchers] = useState<Voucher[]>([]);
+  const [voucherOpen, setVoucherOpen] = useState(false);
+  const [giftCardCode, setGiftCardCode] = useState("");
+  const [quote, setQuote] = useState<CheckoutQuote | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -73,6 +80,34 @@ export default function SeatsPage() {
 
   usePoll(refresh, SHOWTIME_POLL_MS, [refresh]);
 
+  useEffect(() => {
+    api
+      .getPromotions()
+      .then((res) => setVouchers(res.items))
+      .catch(() => setVouchers([]));
+  }, []);
+
+  useEffect(() => {
+    if (!showtime || selected.length === 0) {
+      setQuote(null);
+      return;
+    }
+    const subtotalAmount = Math.round(selected.length * showtime.price * 100) / 100;
+    const timer = window.setTimeout(() => {
+      api
+        .quoteCheckout({
+          showtimeId: showtime.id,
+          seats: selected,
+          subtotalAmount,
+          voucherCode: voucherCode.trim() || undefined,
+          giftCardCode: giftCardCode.trim() || undefined,
+        })
+        .then(setQuote)
+        .catch(() => setQuote(null));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [showtime, selected, voucherCode, giftCardCode]);
+
   if (!showtime && !closed) {
     return <p className="gv-container gv-page">Loading seat map…</p>;
   }
@@ -99,8 +134,10 @@ export default function SeatsPage() {
   }
 
   const unavailable = new Set([...locked, ...booked]);
-  const total = selected.length * showtime.price;
+  const subtotal = selected.length * showtime.price;
+  const finalAmount = quote?.finalAmount ?? subtotal;
   const hasPendingPayment = Boolean(pendingBookingId);
+  const selectedVoucher = vouchers.find((voucher) => voucher.code === voucherCode);
 
   const book = async () => {
     if (!selected.length || loading) return;
@@ -116,15 +153,25 @@ export default function SeatsPage() {
       const userId = profile.userId;
       await api.lockSeats({ showtimeId: showtime.id, seats: selected, userId });
 
+      const codes = {
+        voucherCode: voucherCode.trim() || undefined,
+        giftCardCode: giftCardCode.trim() || undefined,
+      };
+
       const health = await api.health();
       if (health.vnpayEnabled) {
-        const { paymentUrl } = await api.createVnpayPayment({
+        const res = await api.createVnpayPayment({
           showtimeId: showtime.id,
           userId,
           seats: selected,
-          totalAmount: total,
+          ...codes,
         });
-        window.location.href = paymentUrl;
+        if (res.paid && res.ticketId) {
+          navigate(`/ticket/${res.ticketId}`, { replace: true });
+          return;
+        }
+        if (!res.paymentUrl) throw new Error("Payment URL missing");
+        window.location.href = res.paymentUrl;
         return;
       }
 
@@ -132,8 +179,12 @@ export default function SeatsPage() {
         showtimeId: showtime.id,
         userId,
         seats: selected,
-        totalAmount: total,
+        ...codes,
       });
+      if (pending.paid) {
+        navigate(`/ticket/${pending.ticketId}`, { replace: true });
+        return;
+      }
       navigate(`/payment/mock?bookingId=${pending.bookingId}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Booking failed";
@@ -147,7 +198,7 @@ export default function SeatsPage() {
   const onSeatClick = (seat: string) => {
     if (unavailable.has(seat)) return;
     if (selected.includes(seat)) {
-      void book();
+      setSelected((prev) => prev.filter((s) => s !== seat));
       return;
     }
     setSelected((prev) => [...prev, seat]);
@@ -238,16 +289,121 @@ export default function SeatsPage() {
           <p>
             Seats: <strong>{selected.join(", ") || "—"}</strong>
           </p>
-          <p className="gv-total">USD {total.toFixed(2)}</p>
+
+          <div className="gv-field">
+            <span>Movie voucher</span>
+            <button
+              type="button"
+              className="gv-voucher-trigger"
+              aria-expanded={voucherOpen}
+              onClick={() => setVoucherOpen((open) => !open)}
+            >
+              <span>
+                {selectedVoucher
+                  ? selectedVoucher.name
+                  : vouchers.length
+                    ? `Choose from ${vouchers.length} vouchers`
+                    : "No vouchers available"}
+              </span>
+              <span aria-hidden>{voucherOpen ? "▲" : "▼"}</span>
+            </button>
+          </div>
+          {voucherOpen && (
+            <div className="gv-voucher-picker">
+              <div className="gv-voucher-picker-head">
+                <strong>Your vouchers</strong>
+                {voucherCode && (
+                  <button
+                    type="button"
+                    className="gv-voucher-clear"
+                    onClick={() => {
+                      setVoucherCode("");
+                      setVoucherOpen(false);
+                    }}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              {vouchers.map((voucher) => {
+                const checked = validateVoucher(voucher, undefined, {
+                  seatCount: selected.length,
+                });
+                const discount =
+                  voucher.discountType === "PERCENT"
+                    ? `${voucher.value}% off`
+                    : `USD ${voucher.value.toFixed(2)} off`;
+                return (
+                  <button
+                    key={voucher.code}
+                    type="button"
+                    className={`gv-voucher-option${
+                      voucher.code === voucherCode ? " gv-voucher-option--selected" : ""
+                    }`}
+                    disabled={!checked.ok}
+                    onClick={() => {
+                      setVoucherCode(voucher.code);
+                      setVoucherOpen(false);
+                    }}
+                  >
+                    <span>
+                      <strong>{voucher.name}</strong>
+                      <small>{discount}</small>
+                      {!checked.ok && <small className="error">{checked.error.message}</small>}
+                    </span>
+                    <span className="gv-voucher-radio" aria-hidden>
+                      {voucher.code === voucherCode ? "●" : "○"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {quote?.voucherError && <p className="error">{quote.voucherError.message}</p>}
+
+          <label className="gv-field">
+            Gift card
+            <input
+              value={giftCardCode}
+              onChange={(e) => setGiftCardCode(e.target.value.toUpperCase())}
+              placeholder="e.g. GIFT100"
+            />
+          </label>
+          {quote?.giftCardError && <p className="error">{quote.giftCardError.message}</p>}
+
+          <div className="gv-checkout-breakdown">
+            <div>
+              <span>Subtotal</span>
+              <strong>USD {subtotal.toFixed(2)}</strong>
+            </div>
+            <div>
+              <span>Voucher</span>
+              <strong>- USD {(quote?.discountAmount ?? 0).toFixed(2)}</strong>
+            </div>
+            <div>
+              <span>Gift card</span>
+              <strong>- USD {(quote?.giftCardAmount ?? 0).toFixed(2)}</strong>
+            </div>
+          </div>
+          <p className="gv-total">USD {finalAmount.toFixed(2)}</p>
+          {finalAmount <= 0 && selected.length > 0 && (
+            <p className="gv-meta">Fully covered — checkout will issue the ticket without payment.</p>
+          )}
           {error && <p className="error">{error}</p>}
           <div className="gv-seat-actions">
             <button
               type="button"
               className="gv-btn-gold gv-btn-block"
-              disabled={loading || !selected.length}
+              disabled={loading || !selected.length || Boolean(quote?.voucherError || quote?.giftCardError)}
               onClick={book}
             >
-              {loading ? "Processing…" : hasPendingPayment ? "Continue payment" : "Checkout"}
+              {loading
+                ? "Processing…"
+                : finalAmount <= 0
+                  ? "Complete booking"
+                  : hasPendingPayment
+                    ? "Continue payment"
+                    : "Checkout"}
             </button>
             {(selected.length > 0 || myReserved.length > 0) && (
               <button
